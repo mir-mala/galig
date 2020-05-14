@@ -259,9 +259,9 @@ struct comparatore_MEMs
     }
 };
 
-void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {    
+void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {  
     std::vector<std::forward_list<Mem> > MEMs (m+1);
-    std::list<Mem> mem_massimi=MEMs_;
+    std::list<Mem>& mem_massimi=MEMs_;
     for(const Mem& m : MEMs_)
     {
         int p = m.p;
@@ -289,7 +289,7 @@ void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {
         bool nodo_1_not_new;
         bool nodo_2_not_new;
         bool nodo_3_not_new;
-        Mem nodo_massimo=mem_massimi.front();    
+        Mem& nodo_massimo=mem_massimi.front();    
         Node AnnNode1;
         Node NovNode1;
         if(nodo_massimo.isNew) 
@@ -319,9 +319,9 @@ void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {
             NovNode1 = nodo_massimo.NovNode;
         }        
         int p2 = nodo_massimo.p+1;
-        Mem figlio_massimo;
-        Mem figlio_massimo_ann;
-        Mem figlio_attuale;  
+        Mem& figlio_massimo=MEMs[p2].front();
+        Mem& figlio_massimo_ann=MEMs[p2].front();
+        Mem& figlio_attuale=MEMs[p2].front();  
         bool figlio_massimo_ann_stato=false;   
         bool figlio_massimo_instanziato=false;
         bool figlio_stato=false; // se è true sono sicuro di avere un figlio POSSIBILE (err>=0)
@@ -342,8 +342,13 @@ void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {
                 {               
                     if(figlio_stato==false && figlio_attuale.l<=figlio_massimo.l) 
                     {
-                        // se il primo MEMs[p2].front() ha err<0 ma ha il valore di l maggiore
+                        // se il primo MEMs[p2].front() ha err<0 ma ha il valore di l maggiore è un problema
                         figlio_massimo=figlio_attuale;
+                        if(flag)
+                        {
+                            figlio_massimo_ann=figlio_attuale;
+                            figlio_massimo_ann_stato=true;
+                        }
                     }
                     else
                     {
