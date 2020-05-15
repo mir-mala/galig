@@ -319,9 +319,9 @@ void MemsGraph::build(const SplicingGraph& sg, std::list<Mem>& MEMs_) {
             NovNode1 = nodo_massimo.NovNode;
         }        
         int p2 = nodo_massimo.p+1;
-        Mem& figlio_massimo=MEMs[p2].front();
-        Mem& figlio_massimo_ann=MEMs[p2].front();
-        Mem& figlio_attuale=MEMs[p2].front();  
+        Mem figlio_massimo=mem_massimi.back();
+        Mem figlio_massimo_ann=mem_massimi.back();
+        Mem figlio_attuale=mem_massimi.back();
         bool figlio_massimo_ann_stato=false;   
         bool figlio_massimo_instanziato=false;
         bool figlio_stato=false; // se è true sono sicuro di avere un figlio POSSIBILE (err>=0)
