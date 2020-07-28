@@ -349,22 +349,24 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
     }
     mem_massimi.sort(comparatore_MEMs());
     bool percorso = false;
-    bool controllo_end=true; // se entrambi TRUE entro nella fase di controllo
-    bool controllo_start=true;
-    int limite_start=m;
-    int limite_end=0;
+    bool controllo_end=true;        // se entrambi TRUE entro nella fase di controllo
+    bool controllo_start=true;      //
+    int limite_start=m; // tengo il limite sinistro dell'allineamento
+    int limite_end=0; // tengo il limite destro dell'allineamento
     while (!percorso && mem_massimi.size() != 0) // fino a quando non trovo un percorso o visito tutti i MEM
     {
         Mem &nodo_massimo = mem_massimi.front();
         Node AnnNode1;
         Node NovNode1;
+        // devo tenere queste informazioni perchè una volta collegati non sono più nuovi e quinid creo inconsistenza nei dati
         bool nodo_massimo_isnew = nodo_massimo.isNew;
         bool padre_isnew=false;
         bool figlio_isnew=false;  
         bool padre_ann_isnew=false;
         bool figlio_ann_isnew=false; 
-        bool flag_padre=false;
-        bool flag_figlio=false;     
+        // -------------------------------------------------   
+        bool flag_padre=false; // per sapere se il padre può essere annotato
+        bool flag_figlio=false; // per sapere se il figlio può essere annotato
         bool valid_start=false;
         bool valid_end=false;        
         if (nodo_massimo_isnew)
@@ -391,8 +393,8 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
         int err_attuale=0;
         bool padre_massimo_ann_stato = false;
         bool padre_massimo_instanziato = false;
-        bool padre_stato = false;        // se è true sono sicuro di avere un padre POSSIBILE (err>=0)
-        bool padre_precedente=false;
+        bool padre_stato = false; // se è true sono sicuro di avere un padre POSSIBILE (err>=0)
+        bool padre_precedente=false; // indica se ho trovato un MEM precedente al padre del MEM_massimo
         while (p2>=0) // considero un overlap altrimenti dovrei fare "nodo_massimo.p-p2+1>=L"
         {
             if (!MEMs[p2].empty())
@@ -559,7 +561,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                         NovNode3 = padre_massimo.NovNode;
                     }
                 }
-            }
+            }            
             if(flag)
             {
                 Arc arc = AnnGraph.addArc(AnnNode2, AnnNode1);
@@ -584,19 +586,19 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     Arc arc = NovGraph.addArc(NovNode3, NovNode1);
                     NovEdgesMap[arc] = err;
                 }
-            }
-            // controllo che il padre possa essere un nodo di start, se non è new avrò già fatto il controllo               
+            }   
+            // controllo se il padre può essere un buon nodo di start           
                 std::pair<bool, int> start_info_dad = validStart(sg, padre_massimo);
                 if (flag)
                 {
                     if (start_info_dad.first)
                     {
-                        if(padre_isnew==true)
+                        if(padre_isnew==true) // collego solo se il nodo il MEM solo se è nuovo altrimenti l'avrò già collegato
                         {
-                        Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
-                        AnnEdgesMap[arc] = start_info_dad.second;
-                        arc = NovGraph.addArc(NovStart, NovNode2);
-                        NovEdgesMap[arc] = start_info_dad.second;
+                            Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
+                            AnnEdgesMap[arc] = start_info_dad.second;
+                            arc = NovGraph.addArc(NovStart, NovNode2);
+                            NovEdgesMap[arc] = start_info_dad.second;
                         }
                         valid_start=true;
                     }
@@ -607,8 +609,8 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     {
                         if(padre_isnew==true)
                         {
-                        Arc arc = NovGraph.addArc(NovStart, NovNode3);
-                        NovEdgesMap[arc] = start_info_dad.second;
+                            Arc arc = NovGraph.addArc(NovStart, NovNode3);
+                            NovEdgesMap[arc] = start_info_dad.second;
                         }
                         valid_start=true;
                     }
@@ -619,32 +621,34 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                         {
                             if(padre_ann_isnew==true)
                             {
-                            Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
-                            AnnEdgesMap[arc] = start_info_dad_ann.second;
-                            arc = NovGraph.addArc(NovStart, NovNode2);
-                            NovEdgesMap[arc] = start_info_dad_ann.second;
+                                Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
+                                AnnEdgesMap[arc] = start_info_dad_ann.second;
+                                arc = NovGraph.addArc(NovStart, NovNode2);
+                                NovEdgesMap[arc] = start_info_dad_ann.second;
                             }
                             valid_start=true;
                         }
                     }
+                }
                 // controlli per evitare di tralasciare MEM piccoli, padri di MEM che possono essere buoni nodi di start
                 if(valid_start==true && padre_precedente==true) // per lo start non controllo il percorso
                 {
                     controllo_start=false;
                     limite_start=padre_massimo.p+L;
                 }
-            }
         }
         else // controllo se il nodo massimo può essere un buon nodo di start
         {
             std::pair<bool, int> start_info_iniziale = validStart(sg, nodo_massimo);
-            if (start_info_iniziale.first && nodo_massimo_isnew)
+            if (start_info_iniziale.first)
             {
-                // è un buon nodo di start
-                Arc arc = AnnGraph.addArc(AnnStart, AnnNode1);
-                AnnEdgesMap[arc] = start_info_iniziale.second;
-                arc = NovGraph.addArc(NovStart, NovNode1);
-                NovEdgesMap[arc] = start_info_iniziale.second;
+                if(nodo_massimo_isnew) // controllo per non collegare più volte gli stessi nodi 
+                {              
+                    Arc arc = AnnGraph.addArc(AnnStart, AnnNode1);
+                    AnnEdgesMap[arc] = start_info_iniziale.second;
+                    arc = NovGraph.addArc(NovStart, NovNode1);
+                    NovEdgesMap[arc] = start_info_iniziale.second;
+                }
                 valid_start=true;
                 controllo_start=true;
             }
@@ -660,7 +664,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
         bool figlio_massimo_ann_stato = false;
         bool figlio_massimo_instanziato = false;
         bool figlio_stato = false; // se è true sono sicuro di avere un figlio POSSIBILE (err>=0)
-        bool figlio_successivo=false;
+        bool figlio_successivo=false; // indica se ho trovato un MEM successivo al figlio del MEM_massimo
         while (p2 <= m - L + 1)
         {
             if (!MEMs[p2].empty())
@@ -853,7 +857,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     NovEdgesMap[arc] = err;
                 }
             }
-            // controllo che il figlio possa essere un nodo di end, se non è new avrò già fatto il controllo
+            // controllo se il figlio può essere un buon nodo di end
                 std::pair<bool, int> end_info_son = validEnd(sg, figlio_massimo);
                 if (flag)
                 {
@@ -861,36 +865,36 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     {
                         if(figlio_isnew==true)
                         {
-                        Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
-                        AnnEdgesMap[arc] = end_info_son.second;
-                        arc = NovGraph.addArc(NovNode2, NovEnd);
-                        NovEdgesMap[arc] = end_info_son.second;
+                            Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
+                            AnnEdgesMap[arc] = end_info_son.second;
+                            arc = NovGraph.addArc(NovNode2, NovEnd);
+                            NovEdgesMap[arc] = end_info_son.second;
                         }
                         valid_end=true;
                     }
                 }
                 else
                 {
-                    if (end_info_son.first && figlio_massimo.isNew==true)
+                    if (end_info_son.first)
                     {
                         if(figlio_isnew==true)
                         {
-                        Arc arc = NovGraph.addArc(NovNode3, NovEnd);
-                        NovEdgesMap[arc] = end_info_son.second;
+                            Arc arc = NovGraph.addArc(NovNode3, NovEnd);
+                            NovEdgesMap[arc] = end_info_son.second;
                         }
                         valid_end=true;
                     }
                     if (figlio_massimo_ann_stato)
                     {
                         std::pair<bool, int> end_info_son_ann = validEnd(sg, figlio_massimo_ann);
-                        if (end_info_son_ann.first && figlio_massimo.isNew==true)
+                        if (end_info_son_ann.first)
                         {
                             if(figlio_ann_isnew==true)
                             {
-                            Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
-                            AnnEdgesMap[arc] = end_info_son_ann.second;
-                            arc = NovGraph.addArc(NovNode2, NovEnd);
-                            NovEdgesMap[arc] = end_info_son_ann.second;
+                                Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
+                                AnnEdgesMap[arc] = end_info_son_ann.second;
+                                arc = NovGraph.addArc(NovNode2, NovEnd);
+                                NovEdgesMap[arc] = end_info_son_ann.second;
                             }
                             valid_end=true;
                         }
@@ -906,27 +910,30 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
         else // controllo se il nodo massimo può essere un buon nodo di end
         {
             std::pair<bool, int> end_info_iniziale = validEnd(sg, nodo_massimo);
-            if (end_info_iniziale.first && nodo_massimo_isnew)
+            if (end_info_iniziale.first)
             {
-                // può essere un buon nodo di end
-                Arc arc = AnnGraph.addArc(AnnNode1, AnnEnd);
-                AnnEdgesMap[arc] = end_info_iniziale.second;
-                arc = NovGraph.addArc(NovNode1, NovEnd);
-                NovEdgesMap[arc] = end_info_iniziale.second;
+                if(nodo_massimo_isnew)
+                {
+                    Arc arc = AnnGraph.addArc(AnnNode1, AnnEnd);
+                    AnnEdgesMap[arc] = end_info_iniziale.second;
+                    arc = NovGraph.addArc(NovNode1, NovEnd);
+                    NovEdgesMap[arc] = end_info_iniziale.second;
+                }
                 valid_end=true;
                 controllo_end=true;
             }
-        }     
+        }    
         // mi assicuro che il MEM padre preceda un allineamento già presente 
-        if((figlio_isnew==false || nodo_massimo_isnew==false) && padre_stato==true && padre_precedente==false)
+        if((figlio_ann_isnew==false ||figlio_isnew==false || nodo_massimo_isnew==false) && padre_stato==true && padre_precedente==false)
         {
             if(padre_massimo.p+padre_massimo.l<limite_start) // inoltre mi assicuro che il MEM trovato copra il possibile MEM che ignoriamo
             {
                 controllo_start=true;
                 limite_start=m;
             }
-        } 
-        if((figlio_ann_isnew==false || nodo_massimo_isnew==false) && flag_padre==false && padre_massimo_ann_stato==true && padre_precedente==false)
+        }    
+        // caso di padre annotato
+        if((figlio_ann_isnew==false || figlio_isnew==false || nodo_massimo_isnew==false) && flag_padre==false && padre_massimo_ann_stato==true && padre_precedente==false)
         {
             if(padre_massimo_ann.p+padre_massimo_ann.l<limite_start)
             {
@@ -935,7 +942,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
             }
         } 
         // mi assicuro che il MEM figlio prosegua da un allineamento già presente 
-        if((padre_isnew==false || nodo_massimo_isnew==false) && figlio_stato==true && figlio_successivo==false)
+        if((padre_ann_isnew==false || padre_isnew==false || nodo_massimo_isnew==false) && figlio_stato==true && figlio_successivo==false)
         {
             if(limite_end<=figlio_massimo.p) // inoltre mi assicuro che il MEM trovato copra il possibile MEM che ignoriamo
             {
@@ -943,7 +950,8 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                 limite_end=0;
             }
         }  
-        if((padre_ann_isnew==false || nodo_massimo_isnew==false) && flag_figlio==false && figlio_massimo_ann_stato==true && figlio_successivo==false)
+        // caso di figlio annotato
+        if((padre_ann_isnew==false || padre_isnew==false || nodo_massimo_isnew==false) && flag_figlio==false && figlio_massimo_ann_stato==true && figlio_successivo==false)
         {
             if(limite_end<=figlio_massimo_ann.p)
             {
@@ -951,6 +959,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                 limite_end=0;
             }
         }  
+        // controllo di aver trovato un percoso, se possibile
         if(controllo_start==true && controllo_end==true)
         {
             if(valid_start && valid_end) // sono certo di aver trovato un percorso senza doverlo cercare
@@ -959,7 +968,7 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
             }
             else // controllo la possibilità di aver trovato un percorso
             {
-                if((valid_start && !figlio_isnew)||(valid_end && !padre_isnew)||(!padre_isnew && !figlio_isnew))
+                if((valid_start && (!figlio_isnew || !figlio_ann_isnew))||(valid_end && (!padre_isnew || !padre_ann_isnew))||((!padre_isnew || !padre_ann_isnew) && (!figlio_isnew || !figlio_ann_isnew)))
                 {
                     lemon::Dijkstra<Graph, lemon::ListDigraph::ArcMap<int> >
                             ::SetStandardHeap<FibH>
