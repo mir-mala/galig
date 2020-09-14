@@ -71,6 +71,9 @@ private:
     std::pair<bool, int> checkMEMs(const SplicingGraph&, const Mem&, const Mem&);
     std::pair<bool, int> validStart(const SplicingGraph&, const Mem&);
     std::pair<bool, int> validEnd(const SplicingGraph&, const Mem&);
+    std::tuple<bool, bool, Mem, Mem> cerca_nodo(int p2, int valore_confronto, const SplicingGraph &sg, Mem &m1, Mem &m2, Mem &m3, Mem &m4, bool ann_stato, bool stato,
+                                                 std::vector<std::forward_list<Mem>> &MEMs);
+    std::tuple<bool, bool, Node, Node, Node> collegamento_nodo(const SplicingGraph &sg, Mem &m1, Mem &m2, bool ann_stato, Mem &m3, Node AnnNode1, Node NovNode1, bool fp);
 public:
     MemsGraph(const std::string&,
               const int&,

@@ -338,6 +338,245 @@ struct comparatore_MEMs
     }
 };
 
+//m1 è il padre o figlio massimo, m2 è il nodo massimo, m3 è il padre o figlio attuale, m4 è il padre o il filgio massimo_annotato
+std::tuple<bool, bool, Mem, Mem> MemsGraph::cerca_nodo(int p2, int valore_confronto, const SplicingGraph &sg, Mem &m1, Mem &m2, Mem &m3, Mem &m4, bool ann_stato, bool stato,
+                                                        std::vector<std::forward_list<Mem>> &MEMs)
+{
+    bool pf = false; //true sto trattando il padre, false sto trattando il figlio
+    if (p2 == 0)
+    {
+        pf = true;
+    }
+    bool instanziato = false;
+    while (p2 <= valore_confronto) //considero un overlap
+    {
+        if (!MEMs[p2].empty())
+        {
+            if (instanziato == false)
+            {
+                m1 = MEMs[p2].front();
+                instanziato = true;
+            }
+            m3 = MEMs[p2].front();
+            std::pair<bool, int> linkageInfo;
+            if (pf == true)
+            {
+                linkageInfo = checkMEMs(sg, m3, m2);
+            }
+            else
+            {
+                linkageInfo = checkMEMs(sg, m2, m3);
+            }
+            bool flag = linkageInfo.first;
+            int err = linkageInfo.second;
+            if (err >= 0) // se è vero allora questo è un mio possibile (padre o figlio) 
+            {
+                if (stato == false)
+                {
+                    stato = true; // segno che ho un (padre o figlio)
+                    // se il primo MEMs[p2].front() ha err<0 ma ha il valore di l maggiore è un problema
+                    m1 = m3;
+                    if (flag) // può essere un (padre o figlio) annotato
+                    {
+                        m4 = m3;
+                        ann_stato = true;
+                    }
+                }
+                else
+                {
+                    if (m3.l > m1.l)
+                    {
+                        m1 = m3;
+                        if (flag)
+                        {
+                            m4 = m3;
+                            ann_stato = true;
+                        }
+                    }
+                    else
+                    {
+                        if (flag)
+                        {
+                            if (ann_stato == false) // per assicurarmi il (padre o figlio)_massimo_annotato
+                            {
+                                m4 = m3;
+                                ann_stato = true;
+                            }
+                            else
+                            {
+                                if (m3.l > m4.l) // tengo aggiornato anche il (padre o figlio)_masssimo_annotato
+                                {
+                                    m4 = m3;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        p2 = p2 + 1;
+    }
+    return std::make_tuple(ann_stato, stato, m1, m4);
+}
+
+// m1 è il padre o figlio massimo, m2 è il nodo massimo, m3 è il padre o figlio massimo_annotato, fp se true stiamo trattando il figlio, il padre altrimenti
+std::tuple<bool, bool, Node, Node, Node> MemsGraph::collegamento_nodo(const SplicingGraph &sg, Mem &m1, Mem &m2, bool ann_stato, Mem &m3, Node AnnNode1, Node NovNode1, bool fp)
+{
+    Node AnnNode2;
+    Node NovNode2;
+    Node NovNode3; // in caso il (padre o figlio) massimo sia soltanto novel, ma ho trovato un (padre o figlio) che comunque può essere annotato
+    std::pair<bool, int> linkageInfo;
+    if (fp == true)
+    {
+        linkageInfo = checkMEMs(sg, m2, m1);
+    }
+    else
+    {
+        linkageInfo = checkMEMs(sg, m1, m2);
+    }
+    bool flag = linkageInfo.first;
+    int err = linkageInfo.second;
+    bool isnew = false;
+    //creo il nodo
+    if (m1.isNew)
+    {
+        isnew = true;
+        if (flag) // vuoldire che il (padre o figlio)_massimo è uguale al (padre o figlio)_massimo_annotato
+        {
+            AnnNode2 = AnnGraph.addNode();
+            NovNode2 = NovGraph.addNode();
+            m1.setAnnNode(AnnNode2);
+            m1.setNovNode(NovNode2);
+            AnnNodesMap[AnnNode2] = m1;
+            NovNodesMap[NovNode2] = m1;
+        }
+        else // aggiungo comunque un nodo annotato e due nodi novel per poter proseguire dal nodo
+        {
+            if (ann_stato)
+            {
+                if (m3.isNew)
+                {
+                    AnnNode2 = AnnGraph.addNode();
+                    NovNode2 = NovGraph.addNode();
+                    NovNode3 = NovGraph.addNode();
+                    m3.setAnnNode(AnnNode2);
+                    m3.setNovNode(NovNode2);
+                    m1.setNovNode(NovNode3);
+                    AnnNodesMap[AnnNode2] = m3;
+                    NovNodesMap[NovNode2] = m3;
+                    NovNodesMap[NovNode3] = m1;
+                }
+                else
+                {
+                    NovNode3 = NovGraph.addNode();
+                    m1.setNovNode(NovNode3);
+                    NovNodesMap[NovNode3] = m1;
+                    AnnNode2 = m3.AnnNode;
+                    NovNode2 = m3.NovNode;
+                }
+            }
+            else // non ho nessun (padre o figlio) annotato, segno solo il massimo (padre o figlio) novel
+            {
+                NovNode3 = NovGraph.addNode();
+                m1.setNovNode(NovNode3);
+                NovNodesMap[NovNode3] = m1;
+            }
+        }
+    }
+    else
+    {
+        if (flag)
+        {
+            AnnNode2 = m1.AnnNode;
+            NovNode2 = m1.NovNode;
+        }
+        else
+        {
+            if (ann_stato)
+            {
+                if (m3.isNew)
+                {
+                    AnnNode2 = AnnGraph.addNode();
+                    NovNode2 = NovGraph.addNode();
+                    m3.setAnnNode(AnnNode2);
+                    m3.setNovNode(NovNode2);
+                    AnnNodesMap[AnnNode2] = m3;
+                    NovNodesMap[NovNode2] = m3;
+                    NovNode3 = m1.NovNode;
+                }
+                else
+                {
+                    AnnNode2 = m3.AnnNode;
+                    NovNode2 = m3.NovNode;
+                    NovNode3 = m1.NovNode;
+                }
+            }
+            else
+            {
+                NovNode3 = m1.NovNode;
+            }
+        }
+    }
+    //collego il nodo
+    if (flag)
+    {
+        if (fp == true)
+        {
+            Arc arc = AnnGraph.addArc(AnnNode1, AnnNode2);
+            AnnEdgesMap[arc] = err;
+            arc = NovGraph.addArc(NovNode1, NovNode2);
+            NovEdgesMap[arc] = err;
+        }
+        else
+        {
+            Arc arc = AnnGraph.addArc(AnnNode2, AnnNode1);
+            AnnEdgesMap[arc] = err;
+            arc = NovGraph.addArc(NovNode2, NovNode1);
+            NovEdgesMap[arc] = err;
+        }
+    }
+    else
+    {
+        if (ann_stato)
+        {
+            if (fp == true)
+            {
+                std::pair<bool, int> linkageInfo_ann = checkMEMs(sg, m2, m3);
+                Arc arc = AnnGraph.addArc(AnnNode1, AnnNode2);
+                AnnEdgesMap[arc] = linkageInfo_ann.second; // devo dargli l'errore corretto
+                arc = NovGraph.addArc(NovNode1, NovNode2);
+                NovEdgesMap[arc] = linkageInfo_ann.second;
+                arc = NovGraph.addArc(NovNode1, NovNode3);
+                NovEdgesMap[arc] = err;
+            }
+            else
+            {
+                std::pair<bool, int> linkageInfo_ann = checkMEMs(sg, m3, m2);
+                Arc arc = AnnGraph.addArc(AnnNode2, AnnNode1);
+                AnnEdgesMap[arc] = linkageInfo_ann.second; 
+                arc = NovGraph.addArc(NovNode2, NovNode1);
+                NovEdgesMap[arc] = linkageInfo_ann.second;
+                arc = NovGraph.addArc(NovNode3, NovNode1);
+                NovEdgesMap[arc] = err;
+            }
+        }
+        else
+        {
+            if (fp == true)
+            {
+                Arc arc = NovGraph.addArc(NovNode1, NovNode3);
+                NovEdgesMap[arc] = err;
+            }
+            else
+            {
+                Arc arc = NovGraph.addArc(NovNode3, NovNode1);
+                NovEdgesMap[arc] = err;
+            }
+        }
+    }
+    return std::make_tuple(isnew, flag, AnnNode2, NovNode2, NovNode3);
+}
+
 void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
 {
     std::vector<std::forward_list<Mem>> MEMs(m + 1);
@@ -345,28 +584,32 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
     for (const Mem &m : MEMs_)
     {
         int p = m.p;
-        MEMs[p].push_front(m);
+        if (MEMs[p].empty()) // controllo che un elemento ci sia prima di controllare il massimo
+        {
+            MEMs[p].push_front(m);
+        }
+        else
+        {
+            if (m.l >= (MEMs[p].front()).l) // tengo il massimo in alto
+            {
+                MEMs[p].push_front(m);
+            }
+            else
+            {
+                MEMs[p].insert_after(MEMs[p].begin(), m);
+            }
+        }
     }
     mem_massimi.sort(comparatore_MEMs());
     bool percorso = false;
-    bool controllo_end = true;                   // se entrambi TRUE entro nella fase di controllo
-    bool controllo_start = true;                 //
-    int limite_start = m;                        // tengo il limite sinistro dell'allineamento
-    int limite_end = 0;                          // tengo il limite destro dell'allineamento
     while (!percorso && mem_massimi.size() != 0) // fino a quando non trovo un percorso o visito tutti i MEM
     {
         Mem &nodo_massimo = mem_massimi.front();
         Node AnnNode1;
         Node NovNode1;
-        // devo tenere queste informazioni perchè una volta collegati non sono più nuovi e quinid creo inconsistenza nei dati
         bool nodo_massimo_isnew = nodo_massimo.isNew;
         bool padre_isnew = false;
         bool figlio_isnew = false;
-        bool padre_ann_isnew = false;
-        bool figlio_ann_isnew = false;
-        // -------------------------------------------------
-        bool flag_padre = false;  // per sapere se il padre può essere annotato
-        bool flag_figlio = false; // per sapere se il figlio può essere annotato
         bool valid_start = false;
         bool valid_end = false;
         if (nodo_massimo_isnew)
@@ -384,222 +627,34 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
             NovNode1 = nodo_massimo.NovNode;
         }
         // cerco il padre
-        int p2 = nodo_massimo.p - 1;
+        int p2 = 0;
         Mem padre_massimo = mem_massimi.back();
         Mem padre_massimo_ann = mem_massimi.back();
         Mem padre_attuale = mem_massimi.back();
-        int err_massimo = 0;
-        int err_massimo_ann = 0;
-        int err_attuale = 0;
         bool padre_massimo_ann_stato = false;
-        bool padre_massimo_instanziato = false;
-        bool padre_stato = false;      // se è true sono sicuro di avere un padre POSSIBILE (err>=0)
-        bool padre_precedente = false; // indica se ho trovato un MEM precedente al padre del MEM_massimo
-        while (p2 >= 0)                // considero un overlap altrimenti dovrei fare "nodo_massimo.p-p2+1>=L"
-        {
-            if (!MEMs[p2].empty())
-            {
-                if (padre_massimo_instanziato == false)
-                {
-                    padre_massimo = MEMs[p2].front();
-                    padre_massimo_instanziato = true;
-                }
-                for (std::forward_list<Mem>::iterator it = MEMs[p2].begin(); it != MEMs[p2].end(); ++it)
-                {
-                    padre_attuale = *it;
-                    std::pair<bool, int> linkageInfo = checkMEMs(sg, padre_attuale, nodo_massimo);
-                    bool flag = linkageInfo.first;
-                    int err = linkageInfo.second;
-                    if (padre_stato == true && p2 + padre_attuale.l - L < padre_massimo.p) // considero overlap di lunghezza L
-                    {
-                        padre_precedente = true;
-                    }
-                    err_attuale = err;
-                    if (err >= 0) // se è vero allora questo è un mio possibile padre
-                    {
-                        if (padre_stato == false)
-                        {
-                            // se il primo MEMs[p2].front() ha err<0 ma ha il valore di l maggiore è un problema
-                            padre_massimo = padre_attuale;
-                            padre_stato = true; // segno che ho un padre possibile
-                            err_massimo = err_attuale;
-                            padre_precedente = false; // avendo riassegnato il padre devo ricontrollare
-                            if (flag)                 // può essere un padre annotato
-                            {
-                                padre_massimo_ann = padre_attuale;
-                                padre_massimo_ann_stato = true;
-                                err_massimo_ann = err_attuale;
-                            }
-                        }
-                        else
-                        {
-                            if (err_massimo > err_attuale)
-                            {
-                                padre_massimo = padre_attuale;
-                                err_massimo = err_attuale;
-                                padre_precedente = false;
-                                if (flag)
-                                {
-                                    padre_massimo_ann = padre_attuale;
-                                    padre_massimo_ann_stato = true;
-                                    err_massimo_ann = err_attuale;
-                                }
-                            }
-                            else
-                            {
-                                if (flag)
-                                {
-                                    if (padre_massimo_ann_stato == false) // per assicurarmi il padre_massimo_ann
-                                    {
-                                        padre_massimo_ann = padre_attuale;
-                                        padre_massimo_ann_stato = true;
-                                        err_massimo_ann = err_attuale;
-                                    }
-                                    else
-                                    {
-                                        if (err_massimo_ann > err_attuale) // tengo anche il padre maggiore annotato aggiornato
-                                        {
-                                            padre_massimo_ann = padre_attuale;
-                                            err_massimo_ann = err_attuale;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            p2 = p2 - 1;
-        }
+        bool padre_stato = false;                  // se è true sono sicuro di avere un padre POSSIBILE (err>=0)
+        int valore_confronto = nodo_massimo.p - 1; // considero un overlap altrimenti dovrei fare "nodo_massimo.p-p2+1>=L"
+        std::tie(padre_massimo_ann_stato, padre_stato, padre_massimo, padre_massimo_ann) = cerca_nodo(p2, valore_confronto, sg, padre_massimo, nodo_massimo, padre_attuale,
+                                                                                                        padre_massimo_ann, padre_massimo_ann_stato, padre_stato, MEMs);
         // collego il nodo padre
         if (padre_stato)
         {
+            bool flag;
             Node AnnNode2;
             Node NovNode2;
-            Node NovNode3; // in caso il padre massimo sia soltanto novel, ma ho trovato un figlio che comunque può essere annotato
-            std::pair<bool, int> linkageInfo = checkMEMs(sg, padre_massimo, nodo_massimo);
-            bool flag = linkageInfo.first;
-            flag_padre = flag;
-            int err = linkageInfo.second;
-            if (padre_massimo.isNew)
-            {
-                padre_isnew = true;
-                if (flag) // vuoldire che il padre_massimo è uguale al padre_massimo_ann
-                {
-                    AnnNode2 = AnnGraph.addNode();
-                    NovNode2 = NovGraph.addNode();
-                    padre_massimo.setAnnNode(AnnNode2);
-                    padre_massimo.setNovNode(NovNode2);
-                    AnnNodesMap[AnnNode2] = padre_massimo;
-                    NovNodesMap[NovNode2] = padre_massimo;
-                }
-                else // aggiungo comunque un nodo annotato e due nodi novel per poter proseguire dal nodo
-                {
-                    if (padre_massimo_ann_stato)
-                    {
-                        if (padre_massimo_ann.isNew)
-                        {
-                            padre_ann_isnew = true;
-                            AnnNode2 = AnnGraph.addNode();
-                            NovNode2 = NovGraph.addNode();
-                            NovNode3 = NovGraph.addNode();
-                            padre_massimo_ann.setAnnNode(AnnNode2);
-                            padre_massimo_ann.setNovNode(NovNode2);
-                            padre_massimo.setNovNode(NovNode3);
-                            AnnNodesMap[AnnNode2] = padre_massimo_ann;
-                            NovNodesMap[NovNode2] = padre_massimo_ann;
-                            NovNodesMap[NovNode3] = padre_massimo;
-                        }
-                        else
-                        {
-                            NovNode3 = NovGraph.addNode();
-                            padre_massimo.setNovNode(NovNode3);
-                            NovNodesMap[NovNode3] = padre_massimo;
-                            AnnNode2 = padre_massimo_ann.AnnNode;
-                            NovNode2 = padre_massimo_ann.NovNode;
-                        }
-                    }
-                    else // non ho nessun padre annotato, segno solo il massimo padre novel
-                    {
-                        NovNode3 = NovGraph.addNode();
-                        padre_massimo.setNovNode(NovNode3);
-                        NovNodesMap[NovNode3] = padre_massimo;
-                    }
-                }
-            }
-            else
-            {
-                if (flag)
-                {
-                    AnnNode2 = padre_massimo.AnnNode;
-                    NovNode2 = padre_massimo.NovNode;
-                }
-                else
-                {
-                    if (padre_massimo_ann_stato)
-                    {
-                        if (padre_massimo_ann.isNew)
-                        {
-                            padre_ann_isnew = true;
-                            AnnNode2 = AnnGraph.addNode();
-                            NovNode2 = NovGraph.addNode();
-                            padre_massimo_ann.setAnnNode(AnnNode2);
-                            padre_massimo_ann.setNovNode(NovNode2);
-                            AnnNodesMap[AnnNode2] = padre_massimo_ann;
-                            NovNodesMap[NovNode2] = padre_massimo_ann;
-                            NovNode3 = padre_massimo.NovNode;
-                        }
-                        else
-                        {
-                            AnnNode2 = padre_massimo_ann.AnnNode;
-                            NovNode2 = padre_massimo_ann.NovNode;
-                            NovNode3 = padre_massimo.NovNode;
-                        }
-                    }
-                    else
-                    {
-                        NovNode3 = padre_massimo.NovNode;
-                    }
-                }
-            }
-            if (flag)
-            {
-                Arc arc = AnnGraph.addArc(AnnNode2, AnnNode1);
-                AnnEdgesMap[arc] = err;
-                arc = NovGraph.addArc(NovNode2, NovNode1);
-                NovEdgesMap[arc] = err;
-            }
-            else
-            {
-                if (padre_massimo_ann_stato)
-                {
-                    std::pair<bool, int> linkageInfo_ann = checkMEMs(sg, padre_massimo_ann, nodo_massimo);
-                    Arc arc = AnnGraph.addArc(AnnNode2, AnnNode1);
-                    AnnEdgesMap[arc] = linkageInfo_ann.second; // devo dargli l'errore corretto
-                    arc = NovGraph.addArc(NovNode2, NovNode1);
-                    NovEdgesMap[arc] = linkageInfo_ann.second;
-                    arc = NovGraph.addArc(NovNode3, NovNode1);
-                    NovEdgesMap[arc] = err;
-                }
-                else
-                {
-                    Arc arc = NovGraph.addArc(NovNode3, NovNode1);
-                    NovEdgesMap[arc] = err;
-                }
-            }
-            // controllo se il padre può essere un buon nodo di start
+            Node NovNode3;
+            std::tie(padre_isnew, flag, AnnNode2, NovNode2, NovNode3) = collegamento_nodo(sg, padre_massimo, nodo_massimo, padre_massimo_ann_stato, padre_massimo_ann, AnnNode1, NovNode1,
+                                                                                            false);
+            // controllo che il padre possa essere un nodo di start
             std::pair<bool, int> start_info_dad = validStart(sg, padre_massimo);
             if (flag)
             {
                 if (start_info_dad.first)
                 {
-                    if (padre_isnew == true) // collego solo se il nodo il MEM solo se è nuovo altrimenti l'avrò già collegato
-                    {
-                        Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
-                        AnnEdgesMap[arc] = start_info_dad.second;
-                        arc = NovGraph.addArc(NovStart, NovNode2);
-                        NovEdgesMap[arc] = start_info_dad.second;
-                    }
+                    Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
+                    AnnEdgesMap[arc] = start_info_dad.second;
+                    arc = NovGraph.addArc(NovStart, NovNode2);
+                    NovEdgesMap[arc] = start_info_dad.second;
                     valid_start = true;
                 }
             }
@@ -607,11 +662,8 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
             {
                 if (start_info_dad.first)
                 {
-                    if (padre_isnew == true)
-                    {
-                        Arc arc = NovGraph.addArc(NovStart, NovNode3);
-                        NovEdgesMap[arc] = start_info_dad.second;
-                    }
+                    Arc arc = NovGraph.addArc(NovStart, NovNode3);
+                    NovEdgesMap[arc] = start_info_dad.second;
                     valid_start = true;
                 }
                 if (padre_massimo_ann_stato)
@@ -619,257 +671,58 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     std::pair<bool, int> start_info_dad_ann = validStart(sg, padre_massimo_ann);
                     if (start_info_dad_ann.first)
                     {
-                        if (padre_ann_isnew == true)
-                        {
-                            Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
-                            AnnEdgesMap[arc] = start_info_dad_ann.second;
-                            arc = NovGraph.addArc(NovStart, NovNode2);
-                            NovEdgesMap[arc] = start_info_dad_ann.second;
-                        }
+                        Arc arc = AnnGraph.addArc(AnnStart, AnnNode2);
+                        AnnEdgesMap[arc] = start_info_dad_ann.second;
+                        arc = NovGraph.addArc(NovStart, NovNode2);
+                        NovEdgesMap[arc] = start_info_dad_ann.second;
                         valid_start = true;
                     }
                 }
-            }
-            // controlli per evitare di tralasciare MEM piccoli, padri di MEM che possono essere buoni nodi di start
-            if (valid_start == true && padre_precedente == true) // per lo start non controllo il percorso
-            {
-                controllo_start = false;
-                limite_start = padre_massimo.p + L;
             }
         }
         else // controllo se il nodo massimo può essere un buon nodo di start
         {
             std::pair<bool, int> start_info_iniziale = validStart(sg, nodo_massimo);
-            if (start_info_iniziale.first)
+            if (start_info_iniziale.first && nodo_massimo_isnew)
             {
-                if (nodo_massimo_isnew) // controllo per non collegare più volte gli stessi nodi
-                {
-                    Arc arc = AnnGraph.addArc(AnnStart, AnnNode1);
-                    AnnEdgesMap[arc] = start_info_iniziale.second;
-                    arc = NovGraph.addArc(NovStart, NovNode1);
-                    NovEdgesMap[arc] = start_info_iniziale.second;
-                }
+                // è un buon nodo di start
+                Arc arc = AnnGraph.addArc(AnnStart, AnnNode1);
+                AnnEdgesMap[arc] = start_info_iniziale.second;
+                arc = NovGraph.addArc(NovStart, NovNode1);
+                NovEdgesMap[arc] = start_info_iniziale.second;
                 valid_start = true;
-                controllo_start = true;
             }
         }
         // cerco il figlio
         p2 = nodo_massimo.p + nodo_massimo.l - L + 1;
+        ;
         Mem figlio_massimo = mem_massimi.back();
         Mem figlio_massimo_ann = mem_massimi.back();
         Mem figlio_attuale = mem_massimi.back();
-        err_massimo = 0;
-        err_attuale = 0;
-        err_massimo_ann = 0;
         bool figlio_massimo_ann_stato = false;
-        bool figlio_massimo_instanziato = false;
-        bool figlio_stato = false;      // se è true sono sicuro di avere un figlio POSSIBILE (err>=0)
-        bool figlio_successivo = false; // indica se ho trovato un MEM successivo al figlio del MEM_massimo
-        while (p2 <= m - L + 1)
-        {
-            if (!MEMs[p2].empty())
-            {
-                if (figlio_massimo_instanziato == false)
-                {
-                    figlio_massimo = MEMs[p2].front();
-                    figlio_massimo_instanziato = true;
-                }
-                for (std::forward_list<Mem>::iterator it = MEMs[p2].begin(); it != MEMs[p2].end(); ++it)
-                {
-                    if (figlio_stato == true && p2 > figlio_massimo.p + figlio_massimo.l - L) // considero overlap di lunghezza L
-                    {
-                        figlio_successivo = true;
-                    }
-                    figlio_attuale = *it;
-                    std::pair<bool, int> linkageInfo = checkMEMs(sg, nodo_massimo, figlio_attuale);
-                    bool flag = linkageInfo.first;
-                    int err = linkageInfo.second;
-                    err_attuale = err;
-                    if (err >= 0) // se è vero allora questo è un mio possibile figlio
-                    {
-                        if (figlio_stato == false)
-                        {
-                            // se il primo MEMs[p2].front() ha err<0 ma ha il valore di l maggiore è un problema
-                            figlio_massimo = figlio_attuale;
-                            figlio_stato = true; // segno che ho un figlio possibile
-                            err_massimo = err_attuale;
-                            figlio_successivo = false; // avendo riassegnato il figlio devo ricontrollare
-                            if (flag)                  // può essere un figlio annotato
-                            {
-                                figlio_massimo_ann = figlio_attuale;
-                                figlio_massimo_ann_stato = true;
-                                err_massimo_ann = err_attuale;
-                            }
-                        }
-                        else
-                        {
-                            if (err_massimo > err_attuale)
-                            {
-                                figlio_massimo = figlio_attuale;
-                                err_massimo = err_attuale;
-                                figlio_successivo = false;
-                                if (flag)
-                                {
-                                    figlio_massimo_ann = figlio_attuale;
-                                    figlio_massimo_ann_stato = true;
-                                    err_massimo_ann = err_attuale;
-                                }
-                            }
-                            else
-                            {
-                                if (flag)
-                                {
-                                    if (figlio_massimo_ann_stato == false) // per assicurarmi il figlio_massimo_ann
-                                    {
-                                        figlio_massimo_ann = figlio_attuale;
-                                        figlio_massimo_ann_stato = true;
-                                        err_massimo_ann = err_attuale;
-                                    }
-                                    else
-                                    {
-                                        if (err_massimo_ann > err_attuale) // tengo anche il figlio maggiore annotato aggiornato
-                                        {
-                                            figlio_massimo_ann = figlio_attuale;
-                                            err_massimo_ann = err_attuale;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            p2 = p2 + 1;
-        }
+        bool figlio_stato = false; // se è true sono sicuro di avere un figlio POSSIBILE (err>=0)
+        valore_confronto = m - L + 1;
+        std::tie(figlio_massimo_ann_stato, figlio_stato, figlio_massimo, figlio_massimo_ann) = cerca_nodo(p2, valore_confronto, sg, figlio_massimo, nodo_massimo, figlio_attuale,
+                                                                                                            figlio_massimo_ann, figlio_massimo_ann_stato, figlio_stato, MEMs);
         //collego il figlio
         if (figlio_stato)
         {
+            bool flag;
             Node AnnNode2;
             Node NovNode2;
-            Node NovNode3; // in caso il figlio massimo sia soltanto novel, ma ho trovato un figlio che comunque può essere annotato
-            std::pair<bool, int> linkageInfo = checkMEMs(sg, nodo_massimo, figlio_massimo);
-            bool flag = linkageInfo.first;
-            flag_figlio = flag;
-            int err = linkageInfo.second;
-            if (figlio_massimo.isNew)
-            {
-                figlio_isnew = true;
-                if (flag) // vuoldire che il figlio_massimo è uguale al figlio_massimo_ann
-                {
-                    AnnNode2 = AnnGraph.addNode();
-                    NovNode2 = NovGraph.addNode();
-                    figlio_massimo.setAnnNode(AnnNode2);
-                    figlio_massimo.setNovNode(NovNode2);
-                    AnnNodesMap[AnnNode2] = figlio_massimo;
-                    NovNodesMap[NovNode2] = figlio_massimo;
-                }
-                else // aggiungo comunque un nodo annotato e due nodi novel per poter proseguire da quel nodo
-                {
-                    if (figlio_massimo_ann_stato)
-                    {
-                        if (figlio_massimo_ann.isNew)
-                        {
-                            figlio_ann_isnew = true;
-                            AnnNode2 = AnnGraph.addNode();
-                            NovNode2 = NovGraph.addNode();
-                            NovNode3 = NovGraph.addNode();
-                            figlio_massimo_ann.setAnnNode(AnnNode2);
-                            figlio_massimo_ann.setNovNode(NovNode2);
-                            figlio_massimo.setNovNode(NovNode3);
-                            AnnNodesMap[AnnNode2] = figlio_massimo_ann;
-                            NovNodesMap[NovNode2] = figlio_massimo_ann;
-                            NovNodesMap[NovNode3] = figlio_massimo;
-                        }
-                        else
-                        {
-                            NovNode3 = NovGraph.addNode();
-                            figlio_massimo.setNovNode(NovNode3);
-                            NovNodesMap[NovNode3] = figlio_massimo;
-                            AnnNode2 = figlio_massimo_ann.AnnNode;
-                            NovNode2 = figlio_massimo_ann.NovNode;
-                        }
-                    }
-                    else // non ho nessun figlio annotato, segno solo il massimo figlio novel
-                    {
-                        NovNode3 = NovGraph.addNode();
-                        figlio_massimo.setNovNode(NovNode3);
-                        NovNodesMap[NovNode3] = figlio_massimo;
-                    }
-                }
-            }
-            else
-            {
-                if (flag)
-                {
-                    AnnNode2 = figlio_massimo.AnnNode;
-                    NovNode2 = figlio_massimo.NovNode;
-                }
-                else
-                {
-                    if (figlio_massimo_ann_stato)
-                    {
-                        if (figlio_massimo_ann.isNew)
-                        {
-                            figlio_ann_isnew = true;
-                            AnnNode2 = AnnGraph.addNode();
-                            NovNode2 = NovGraph.addNode();
-                            figlio_massimo_ann.setAnnNode(AnnNode2);
-                            figlio_massimo_ann.setNovNode(NovNode2);
-                            AnnNodesMap[AnnNode2] = figlio_massimo_ann;
-                            NovNodesMap[NovNode2] = figlio_massimo_ann;
-                            NovNode3 = figlio_massimo.NovNode;
-                        }
-                        else
-                        {
-                            AnnNode2 = figlio_massimo_ann.AnnNode;
-                            NovNode2 = figlio_massimo_ann.NovNode;
-                            NovNode3 = figlio_massimo.NovNode;
-                        }
-                    }
-                    else
-                    {
-                        NovNode3 = figlio_massimo.NovNode;
-                    }
-                }
-            }
-            if (flag)
-            {
-                Arc arc = AnnGraph.addArc(AnnNode1, AnnNode2);
-                AnnEdgesMap[arc] = err;
-                arc = NovGraph.addArc(NovNode1, NovNode2);
-                NovEdgesMap[arc] = err;
-            }
-            else
-            {
-                if (figlio_massimo_ann_stato)
-                {
-                    std::pair<bool, int> linkageInfo_ann = checkMEMs(sg, nodo_massimo, figlio_massimo);
-                    Arc arc = AnnGraph.addArc(AnnNode1, AnnNode2);
-                    AnnEdgesMap[arc] = linkageInfo_ann.second;
-                    arc = NovGraph.addArc(NovNode1, NovNode2);
-                    NovEdgesMap[arc] = linkageInfo_ann.second;
-                    arc = NovGraph.addArc(NovNode1, NovNode3);
-                    NovEdgesMap[arc] = err;
-                }
-                else
-                {
-                    Arc arc = NovGraph.addArc(NovNode1, NovNode3);
-                    NovEdgesMap[arc] = err;
-                }
-            }
-            // controllo se il figlio può essere un buon nodo di end
+            Node NovNode3;
+            std::tie(figlio_isnew, flag, AnnNode2, NovNode2, NovNode3) = collegamento_nodo(sg, figlio_massimo, nodo_massimo, figlio_massimo_ann_stato, figlio_massimo_ann, AnnNode1,
+                                                                                            NovNode1, true);
+            // controllo che il figlio possa essere un nodo di end
             std::pair<bool, int> end_info_son = validEnd(sg, figlio_massimo);
             if (flag)
             {
                 if (end_info_son.first)
                 {
-                    if (figlio_isnew == true)
-                    {
-                        Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
-                        AnnEdgesMap[arc] = end_info_son.second;
-                        arc = NovGraph.addArc(NovNode2, NovEnd);
-                        NovEdgesMap[arc] = end_info_son.second;
-                    }
+                    Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
+                    AnnEdgesMap[arc] = end_info_son.second;
+                    arc = NovGraph.addArc(NovNode2, NovEnd);
+                    NovEdgesMap[arc] = end_info_son.second;
                     valid_end = true;
                 }
             }
@@ -877,11 +730,8 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
             {
                 if (end_info_son.first)
                 {
-                    if (figlio_isnew == true)
-                    {
-                        Arc arc = NovGraph.addArc(NovNode3, NovEnd);
-                        NovEdgesMap[arc] = end_info_son.second;
-                    }
+                    Arc arc = NovGraph.addArc(NovNode3, NovEnd);
+                    NovEdgesMap[arc] = end_info_son.second;
                     valid_end = true;
                 }
                 if (figlio_massimo_ann_stato)
@@ -889,97 +739,50 @@ void MemsGraph::build(const SplicingGraph &sg, std::list<Mem> &MEMs_)
                     std::pair<bool, int> end_info_son_ann = validEnd(sg, figlio_massimo_ann);
                     if (end_info_son_ann.first)
                     {
-                        if (figlio_ann_isnew == true)
-                        {
-                            Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
-                            AnnEdgesMap[arc] = end_info_son_ann.second;
-                            arc = NovGraph.addArc(NovNode2, NovEnd);
-                            NovEdgesMap[arc] = end_info_son_ann.second;
-                        }
+                        Arc arc = AnnGraph.addArc(AnnNode2, AnnEnd);
+                        AnnEdgesMap[arc] = end_info_son_ann.second;
+                        arc = NovGraph.addArc(NovNode2, NovEnd);
+                        NovEdgesMap[arc] = end_info_son_ann.second;
                         valid_end = true;
                     }
                 }
-            }
-            // controlli per evitare di tralasciare MEM piccoli, figli di MEM che possono essere buoni nodi di end
-            if (valid_end == true && figlio_successivo == true) // per l'end non controllo il percorso
-            {
-                controllo_end = false;
-                limite_end = figlio_massimo.p + figlio_massimo.l - L;
             }
         }
         else // controllo se il nodo massimo può essere un buon nodo di end
         {
             std::pair<bool, int> end_info_iniziale = validEnd(sg, nodo_massimo);
-            if (end_info_iniziale.first)
+            if (end_info_iniziale.first && nodo_massimo_isnew)
             {
-                if (nodo_massimo_isnew)
-                {
-                    Arc arc = AnnGraph.addArc(AnnNode1, AnnEnd);
-                    AnnEdgesMap[arc] = end_info_iniziale.second;
-                    arc = NovGraph.addArc(NovNode1, NovEnd);
-                    NovEdgesMap[arc] = end_info_iniziale.second;
-                }
+                // può essere un buon nodo di end
+                Arc arc = AnnGraph.addArc(AnnNode1, AnnEnd);
+                AnnEdgesMap[arc] = end_info_iniziale.second;
+                arc = NovGraph.addArc(NovNode1, NovEnd);
+                NovEdgesMap[arc] = end_info_iniziale.second;
                 valid_end = true;
-                controllo_end = true;
             }
         }
-        // mi assicuro che il MEM padre preceda un allineamento già presente
-        if ((figlio_ann_isnew == false || figlio_isnew == false || nodo_massimo_isnew == false) && padre_stato == true && padre_precedente == false)
+        if (valid_start && valid_end) // sono certo di aver trovato un percorso senza doverlo cercare
         {
-            if (padre_massimo.p + padre_massimo.l < limite_start) // inoltre mi assicuro che il MEM trovato copra il possibile MEM che ignoriamo
+            percorso = true;
+        }
+        bool controllo = false;
+        if (percorso == false) // controllo la possibilità di aver trovato un percorso
+        {
+            if ((valid_start && !figlio_isnew) || (valid_end && !padre_isnew) || (!padre_isnew && !figlio_isnew))
             {
-                controllo_start = true;
-                limite_start = m;
+                controllo = true;
             }
         }
-        // caso di padre annotato
-        if ((figlio_ann_isnew == false || figlio_isnew == false || nodo_massimo_isnew == false) && flag_padre == false && padre_massimo_ann_stato == true && padre_precedente == false)
+        if (controllo)
         {
-            if (padre_massimo_ann.p + padre_massimo_ann.l < limite_start)
-            {
-                controllo_start = true;
-                limite_start = m;
-            }
-        }
-        // mi assicuro che il MEM figlio prosegua da un allineamento già presente
-        if ((padre_ann_isnew == false || padre_isnew == false || nodo_massimo_isnew == false) && figlio_stato == true && figlio_successivo == false)
-        {
-            if (limite_end <= figlio_massimo.p) // inoltre mi assicuro che il MEM trovato copra il possibile MEM che ignoriamo
-            {
-                controllo_end = true;
-                limite_end = 0;
-            }
-        }
-        // caso di figlio annotato
-        if ((padre_ann_isnew == false || padre_isnew == false || nodo_massimo_isnew == false) && flag_figlio == false && figlio_massimo_ann_stato == true && figlio_successivo == false)
-        {
-            if (limite_end <= figlio_massimo_ann.p)
-            {
-                controllo_end = true;
-                limite_end = 0;
-            }
-        }
-        // controllo di aver trovato un percoso, se possibile
-        if (controllo_start == true && controllo_end == true)
-        {
-            if (valid_start && valid_end) // sono certo di aver trovato un percorso senza doverlo cercare
+            lemon::Dijkstra<Graph, lemon::ListDigraph::ArcMap<int>>::SetStandardHeap<FibH>::SetHeap<FibH, FibM>::Create AnnDijkstra(AnnGraph, AnnEdgesMap);
+            FibM AnnHCR(AnnGraph);
+            FibH AnnHeap(AnnHCR);
+            AnnDijkstra.heap(AnnHeap, AnnHCR);
+            AnnDijkstra.run(AnnStart, AnnEnd);
+            if (AnnDijkstra.reached(AnnEnd))
             {
                 percorso = true;
-            }
-            else // controllo la possibilità di aver trovato un percorso
-            {
-                if ((valid_start && (!figlio_isnew || !figlio_ann_isnew)) || (valid_end && (!padre_isnew || !padre_ann_isnew)) || ((!padre_isnew || !padre_ann_isnew) && (!figlio_isnew || !figlio_ann_isnew)))
-                {
-                    lemon::Dijkstra<Graph, lemon::ListDigraph::ArcMap<int>>::SetStandardHeap<FibH>::SetHeap<FibH, FibM>::Create AnnDijkstra(AnnGraph, AnnEdgesMap);
-                    FibM AnnHCR(AnnGraph);
-                    FibH AnnHeap(AnnHCR);
-                    AnnDijkstra.heap(AnnHeap, AnnHCR);
-                    AnnDijkstra.run(AnnStart, AnnEnd);
-                    if (AnnDijkstra.reached(AnnEnd))
-                    {
-                        percorso = true;
-                    }
-                }
             }
         }
         mem_massimi.pop_front();
